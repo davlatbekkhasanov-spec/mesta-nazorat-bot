@@ -44,11 +44,11 @@ async def send_group(bot: Bot, text: str) -> bool:
 
 
 def group_started_message(*, name: str) -> str:
-    return f"🚛  <b>{_he(name)}</b> mesta qo'yish ishlarini boshladi"
+    return f"🚛  <b>{_he(name)}</b> pereschet ishlarini boshladi"
 
 
 def group_finished_message(*, name: str) -> str:
-    return f"🏁  <b>{_he(name)}</b> mesta qo'yish ishlarini yakunladi"
+    return f"🏁  <b>{_he(name)}</b> pereschet ishlarini yakunladi"
 
 
 def start_message(*, name: str, started_at) -> str:
@@ -139,7 +139,7 @@ def finish_message(
     lines = [
         banner,
         "",
-        "📊 <b>MESTA YAKUNLANDI</b>",
+        "📊 <b>PERESCHET YAKUNLANDI</b>",
         "",
         f"👤 <b>{name}</b>",
         f"🕐 {date_str}  ·  <b>{fmt_hm(started_at)}</b> → <b>{fmt_hm(finished_at)}</b>",
