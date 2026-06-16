@@ -25,13 +25,13 @@ async def cmd_start(message: Message, bot: Bot, db: AsyncSession, state: FSMCont
     extra = ""
     if cleared:
         extra = (
-            f"\n\n🔄 Eski ochiq пересчет bekor qilindi (<b>{cleared}</b> ta). "
+            f"\n\n🔄 Eski ochiq inventarizatsiya bekor qilindi (<b>{cleared}</b> ta). "
             "Yangi ishni boshlashingiz mumkin."
         )
 
     await message.answer(
         "👋 <b>Hisobchi Bot</b>\n\n"
-        f"Pereschet jarayoni — norma: <b>1 pozitsiya = {mpp:g} daqiqa</b>.\n\n"
+        f"Inventarizatsiya jarayoni — norma: <b>1 pozitsiya = {mpp:g} daqiqa</b>.\n\n"
         "<b>Jarayon:</b>\n"
         "▶️ Boshlash → onlayn sekundomer ishlaydi\n"
         "⏸ Pauza → vaqt to'xtaydi\n"

@@ -67,7 +67,7 @@ class LiveTimerService:
             sub = "Sekundomer to'xtatilgan"
         else:
             pulse = _RUN_FRAMES[tick % len(_RUN_FRAMES)]
-            header = f"{pulse} <b>MESTA — ONLAYN SEKUNDOMER</b> {pulse}"
+            header = f"{pulse} <b>INVENTARIZATSIYA — ONLAYN SEKUNDOMER</b> {pulse}"
             sub = "Ish vaqti hisoblanmoqda..."
 
         lines = [

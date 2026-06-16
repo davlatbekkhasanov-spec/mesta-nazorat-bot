@@ -101,7 +101,7 @@ async def get_open_session(session: AsyncSession, telegram_id: int) -> WorkSessi
 async def start_session(session: AsyncSession, telegram_id: int, full_name: str) -> tuple[WorkSession | None, str]:
     existing = await get_open_session(session, telegram_id)
     if existing:
-        return None, "Sizda ochiq mesta bor. Avval yakunlang yoki davom eting."
+        return None, "Sizda ochiq inventarizatsiya bor. Avval yakunlang yoki davom eting."
 
     user = await get_or_create_user(session, telegram_id, full_name)
     ws = WorkSession(
@@ -120,7 +120,7 @@ async def start_session(session: AsyncSession, telegram_id: int, full_name: str)
 async def pause_session(session: AsyncSession, telegram_id: int) -> tuple[SessionView | None, str]:
     ws = await get_open_session(session, telegram_id)
     if not ws:
-        return None, "Ochiq mesta yo'q."
+        return None, "Ochiq inventarizatsiya yo'q."
     if ws.status == SessionStatus.awaiting_positions:
         return None, "Pozitsiya sonini kiriting."
     if ws.status == SessionStatus.paused:
@@ -135,7 +135,7 @@ async def pause_session(session: AsyncSession, telegram_id: int) -> tuple[Sessio
 async def resume_session(session: AsyncSession, telegram_id: int) -> tuple[SessionView | None, str]:
     ws = await get_open_session(session, telegram_id)
     if not ws:
-        return None, "Ochiq mesta yo'q."
+        return None, "Ochiq inventarizatsiya yo'q."
     if ws.status != SessionStatus.paused:
         return None, "Pauza yo'q."
 
@@ -148,7 +148,7 @@ async def resume_session(session: AsyncSession, telegram_id: int) -> tuple[Sessi
 async def request_finish(session: AsyncSession, telegram_id: int) -> tuple[WorkSession | None, str]:
     ws = await get_open_session(session, telegram_id)
     if not ws:
-        return None, "Ochiq mesta yo'q."
+        return None, "Ochiq inventarizatsiya yo'q."
     if ws.status == SessionStatus.awaiting_positions:
         return ws, ""
 

@@ -93,7 +93,7 @@ async def _reply_open_session(
 
     status = "⏸ pauzada" if ws.status == SessionStatus.paused else "▶️ ishlayapti"
     await message.answer(
-        f"⚠️ <b>Sizda ochiq mesta bor</b> ({status})\n\n"
+        f"⚠️ <b>Sizda ochiq inventarizatsiya bor</b> ({status})\n\n"
         f"Boshlangan: <b>{fmt_hm(ws.started_at)}</b>\n\n"
         "Davom eting, «Yakunlash» bosing yoki yangi ish uchun /start yuboring.",
         reply_markup=kb,
@@ -222,8 +222,8 @@ async def finish_positions_invalid(message: Message) -> None:
 async def cmd_active(message: Message, db: AsyncSession) -> None:
     views = await list_active_sessions(db)
     if not views:
-        return await message.answer("Hozir mesta bilan ishlayotganlar yo'q.")
-    lines = ["<b>Hozir mesta bilan ishlayotganlar:</b>\n"]
+        return await message.answer("Hozir inventarizatsiya bilan ishlayotganlar yo'q.")
+    lines = ["<b>Hozir inventarizatsiya bilan ishlayotganlar:</b>\n"]
     for i, v in enumerate(views, 1):
         status = "⏸ pauza" if v.session.status == "paused" else "▶️ ish"
         lines.append(
