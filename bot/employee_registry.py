@@ -10,7 +10,7 @@ DEFAULT_GROUP_ID = -1001877019294
 BUILTIN_ADMIN_IDS: frozenset[int] = frozenset({DAVLATBEK_ADMIN_ID})
 
 TG_EMPLOYEE: dict[int, str] = {
-    924612402: "Ergashev Ozodbek",
+    7844168817: "Ergashev Ozodbek",
     5412958249: "Ravshanov Oxunjon",
     8547365654: "Ruziboev Sindor",
     6931958983: "Mustafoev Abdullo",
