@@ -10,6 +10,13 @@ from bot.config import get_settings
 from bot.utils.norm import NormStatus, kaizen_points, norm_time_minutes, time_saved_minutes, time_waste_minutes
 from bot.utils.time_fmt import fmt_datetime, fmt_hm, fmt_minutes
 from bot.utils.visual import progress_bar
+from bot.work_types import (
+    WorkType,
+    finish_title,
+    group_finished_message,
+    group_started_message,
+    positions_unit,
+)
 
 log = logging.getLogger(__name__)
 
@@ -43,16 +50,8 @@ async def send_group(bot: Bot, text: str) -> bool:
         return False
 
 
-def group_started_message(*, name: str) -> str:
-    return f"🚛  <b>{_he(name)}</b> inventarizatsiya ishlarini boshladi"
-
-
-def group_finished_message(*, name: str) -> str:
-    return f"🏁  <b>{_he(name)}</b> inventarizatsiya ishlarini yakunladi"
-
-
 def start_message(*, name: str, started_at) -> str:
-    return group_started_message(name=name)
+    return group_started_message(name=name, work_type=WorkType.inventarizatsiya)
 
 
 def pause_message(*, name: str) -> str:
@@ -111,6 +110,7 @@ def finish_message(
     finished_at,
     norm: NormStatus,
     minutes_per_position: float,
+    work_type: WorkType | str = WorkType.inventarizatsiya,
 ) -> str:
     mpp = minutes_per_position if minutes_per_position > 0 else 3.0
     actual = norm.actual
@@ -139,13 +139,13 @@ def finish_message(
     lines = [
         banner,
         "",
-        "📊 <b>INVENTARIZATSIYA YAKUNLANDI</b>",
+        finish_title(work_type),
         "",
         f"👤 <b>{name}</b>",
         f"🕐 {date_str}  ·  <b>{fmt_hm(started_at)}</b> → <b>{fmt_hm(finished_at)}</b>",
         "",
         _SEP,
-        f"📦 <b>{actual}</b> pozitsiya{pause_part}",
+        f"📦 <b>{actual}</b> {positions_unit(work_type)}{pause_part}",
     ]
     if verdict:
         lines.append(verdict)

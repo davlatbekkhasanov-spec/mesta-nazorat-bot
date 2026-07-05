@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from bot.config import get_settings
 from bot.database.models import WorkSession
 from bot.utils.norm import NormStatus, kaizen_points, time_saved_minutes, time_waste_minutes
 from bot.utils.time_fmt import fmt_clock_from_seconds, session_pause_seconds, session_work_seconds
+from bot.work_types import WorkType, minutes_per_position
 
 
 def compact_hub_summary(ws: WorkSession, norm: NormStatus) -> str:
-    mpp = get_settings().minutes_per_position
+    mpp = minutes_per_position(ws.work_type or WorkType.inventarizatsiya)
     work_sec = int(session_work_seconds(ws))
     pause_sec = int(session_pause_seconds(ws))
     work_min = work_sec / 60.0
@@ -20,7 +20,8 @@ def compact_hub_summary(ws: WorkSession, norm: NormStatus) -> str:
     dam = fmt_clock_from_seconds(pause_sec)
     tejash = fmt_clock_from_seconds(saved_sec)
     bekor = fmt_clock_from_seconds(waste_sec)
+    prefix = "Приход" if str(ws.work_type) == WorkType.prihod else "Mesta"
     return (
-        f"Mesta: poz {ws.total_positions}, ish {ish}, dam {dam}, "
+        f"{prefix}: poz {ws.total_positions}, ish {ish}, dam {dam}, "
         f"tejash {tejash}, bekor {bekor}, kaizen {pts}"
     )

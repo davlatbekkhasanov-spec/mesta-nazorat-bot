@@ -15,6 +15,7 @@ from bot.database.session import require_session_local
 from bot.services.mesta import get_open_session
 from bot.utils.time_fmt import session_pause_seconds, session_work_seconds
 from bot.utils.visual import clock_box, fmt_stopwatch
+from bot.work_types import WorkType, minutes_per_position, timer_header
 
 log = logging.getLogger(__name__)
 
@@ -56,18 +57,19 @@ class LiveTimerService:
         work_sec: float,
         pause_sec: float,
         paused: bool,
+        work_type: WorkType | str = WorkType.inventarizatsiya,
         tick: int = 0,
     ) -> str:
-        mpp = get_settings().minutes_per_position
+        mpp = minutes_per_position(work_type)
         clock = fmt_stopwatch(work_sec)
         safe = self._safe_name(name)
 
         if paused:
-            header = "⏸ <b>PAUZADA</b>"
+            header = timer_header(paused=True, work_type=work_type)
             sub = "Sekundomer to'xtatilgan"
         else:
             pulse = _RUN_FRAMES[tick % len(_RUN_FRAMES)]
-            header = f"{pulse} <b>INVENTARIZATSIYA — ONLAYN SEKUNDOMER</b> {pulse}"
+            header = timer_header(paused=False, work_type=work_type, pulse=pulse)
             sub = "Ish vaqti hisoblanmoqda..."
 
         lines = [
@@ -95,6 +97,7 @@ class LiveTimerService:
             work_sec=session_work_seconds(ws),
             pause_sec=session_pause_seconds(ws),
             paused=_paused(ws.status),
+            work_type=ws.work_type or WorkType.inventarizatsiya,
             tick=tick,
         )
 

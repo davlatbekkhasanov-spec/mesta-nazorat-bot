@@ -7,6 +7,7 @@ from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.database.base import Base
+from bot.work_types import WorkType
 
 
 class SessionStatus(StrEnum):
@@ -45,6 +46,7 @@ class WorkSession(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(24), default=SessionStatus.active, index=True)
+    work_type: Mapped[str] = mapped_column(String(32), default=WorkType.inventarizatsiya, index=True)
     total_positions: Mapped[int] = mapped_column(Integer, default=0)
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total_pause_sec: Mapped[int] = mapped_column(Integer, default=0)
