@@ -64,9 +64,28 @@ async function main() {
   }
   await upsertEnv(env);
 
+  await stopDuplicatePolling();
+
   const sha = process.argv[2];
   if (!sha) throw new Error("commit SHA kerak: node railway-deploy-mesta.mjs <sha>");
   await deploy(sha);
+}
+
+async function stopDuplicatePolling() {
+  const DUP = "1309ba4f-7493-4f52-87f4-b7ec982e77e4";
+  await gql(
+    `mutation($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }`,
+    {
+      input: {
+        projectId: MESTA.projectId,
+        environmentId: MESTA.environmentId,
+        serviceId: DUP,
+        variables: { BOT_TOKEN: "" },
+        replace: false,
+      },
+    }
+  );
+  console.log("dup MestaBot8834: BOT_TOKEN tozalandi");
 }
 
 main().catch((e) => {

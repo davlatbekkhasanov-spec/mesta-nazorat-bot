@@ -111,6 +111,9 @@ async def main() -> None:
 
     monitor_task = asyncio.create_task(run_norm_monitor(bot))
     try:
+        from telegram_polling_guard import ensure_polling_mode
+
+        await ensure_polling_mode(bot)
         await dp.start_polling(bot)
     finally:
         monitor_task.cancel()
