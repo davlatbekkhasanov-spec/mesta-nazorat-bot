@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from aiogram import Bot, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,7 @@ from bot.handlers.mesta import _reply_open_session
 router = Router(name="common")
 
 
+@router.message(CommandStart())
 @router.message(Command("start"))
 async def cmd_start(message: Message, bot: Bot, db: AsyncSession, state: FSMContext) -> None:
     uid = message.from_user.id if message.from_user else 0
@@ -29,7 +30,7 @@ async def cmd_start(message: Message, bot: Bot, db: AsyncSession, state: FSMCont
     mpp = get_settings().minutes_per_position
     mpp_prihod = get_settings().minutes_per_position_prihod
     await message.answer(
-        "👋 <b>Mesta Nazorat Bot</b>\n\n"
+        "👋 <b>Hisobchi Bot</b>\n\n"
         f"📦 <b>Inventarizatsiya</b> — norma: <b>1 poz = {mpp:g} daqiqa</b>\n"
         f"📥 <b>Prihod</b> — norma: <b>1 poz = {mpp_prihod:g} daqiqa</b>\n\n"
         "<b>Jarayon:</b>\n"
