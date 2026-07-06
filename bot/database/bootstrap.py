@@ -84,13 +84,27 @@ def run_migrations(url: str) -> None:
         raise RuntimeError(f"Migration DB ulanmadi: {last_err}")
 
     cfg = Config("alembic.ini")
+    has_users = False
+    _apply_schema_patches(engine)
     try:
-        _reconcile_alembic_stamp(engine, cfg)
-        command.upgrade(cfg, "head")
-        log.info("Alembic upgrade head OK")
+        with engine.connect() as conn:
+            has_users = bool(conn.execute(text("SELECT to_regclass('public.users')")).scalar())
+        if has_users:
+            _reconcile_alembic_stamp(engine, cfg)
+            command.stamp(cfg, "head")
+            log.info("Alembic head stamp (mavjud DB)")
+        else:
+            command.upgrade(cfg, "head")
+            log.info("Alembic upgrade head OK")
     except Exception as exc:
         last_err = exc
-        log.warning("Alembic upgrade failed: %s", exc)
+        log.warning("Alembic migrate failed: %s", exc)
+        if has_users:
+            try:
+                command.stamp(cfg, "head")
+                log.info("Alembic stamped head after failure")
+            except Exception as exc2:
+                log.warning("Alembic stamp head failed: %s", exc2)
         try:
             Base.metadata.create_all(engine)
         except Exception as exc2:
@@ -132,6 +146,8 @@ def _reconcile_alembic_stamp(engine, cfg) -> None:
                 )
             ).scalar()
             target = "003" if width and int(width) >= 32 else "002"
+        elif conn.execute(text("SELECT to_regclass('public.hub_day_push')")).scalar():
+            target = "002"
 
         has_ver = conn.execute(text("SELECT to_regclass('public.alembic_version')")).scalar()
         if not target:
