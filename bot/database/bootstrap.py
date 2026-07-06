@@ -85,12 +85,7 @@ def run_migrations(url: str) -> None:
 
     cfg = Config("alembic.ini")
     try:
-        with engine.connect() as conn:
-            has_users = conn.execute(text("SELECT to_regclass('public.users')")).scalar()
-            has_ver = conn.execute(text("SELECT to_regclass('public.alembic_version')")).scalar()
-        if has_users and not has_ver:
-            command.stamp(cfg, "001")
-            log.info("Alembic stamped 001 (mavjud jadval)")
+        _reconcile_alembic_stamp(engine, cfg)
         command.upgrade(cfg, "head")
         log.info("Alembic upgrade head OK")
     except Exception as exc:
@@ -105,12 +100,61 @@ def run_migrations(url: str) -> None:
     engine.dispose()
 
 
+def _reconcile_alembic_stamp(engine, cfg) -> None:
+    """Mavjud DB da alembic_version orqada qolsa — 002 da qotib qolmaslik."""
+    from alembic import command
+
+    with engine.connect() as conn:
+        if not conn.execute(text("SELECT to_regclass('public.users')")).scalar():
+            return
+
+        def has_col(column: str) -> bool:
+            return bool(
+                conn.execute(
+                    text(
+                        "SELECT 1 FROM information_schema.columns "
+                        "WHERE table_schema='public' AND table_name='work_sessions' "
+                        "AND column_name=:c LIMIT 1"
+                    ),
+                    {"c": column},
+                ).scalar()
+            )
+
+        target: str | None = None
+        if has_col("work_type"):
+            target = "004"
+        elif has_col("paused_at"):
+            width = conn.execute(
+                text(
+                    "SELECT character_maximum_length FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name='work_sessions' "
+                    "AND column_name='status'"
+                )
+            ).scalar()
+            target = "003" if width and int(width) >= 32 else "002"
+
+        has_ver = conn.execute(text("SELECT to_regclass('public.alembic_version')")).scalar()
+        if not target:
+            if not has_ver:
+                command.stamp(cfg, "001")
+                log.info("Alembic stamped 001 (mavjud jadval)")
+            return
+
+        current = None
+        if has_ver:
+            current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        if current != target:
+            command.stamp(cfg, target)
+            log.info("Alembic stamped %s (schema reconcile)", target)
+
+
 def _apply_schema_patches(engine) -> None:
     """Alembic ishlamasa — 002 ustunlari va hub jadvali."""
     patches = [
         "ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ",
         "ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS total_pause_sec INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS hub_pushed_at TIMESTAMPTZ",
+        "ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS work_type VARCHAR(32) NOT NULL DEFAULT 'inventarizatsiya'",
         "ALTER TABLE work_sessions ALTER COLUMN status TYPE VARCHAR(32)",
         """
         CREATE TABLE IF NOT EXISTS hub_day_push (
