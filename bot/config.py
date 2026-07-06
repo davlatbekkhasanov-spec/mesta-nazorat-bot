@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     group_chat_id: int = 0
     admin_ids: str = ""
     minutes_per_position: float = 3.0
-    minutes_per_position_prihod: float = 3.0
     monitor_interval_minutes: int = 15
     tz: str = "Asia/Tashkent"
 
@@ -62,15 +61,6 @@ class Settings(BaseSettings):
     @field_validator("minutes_per_position", mode="before")
     @classmethod
     def _mpp(cls, v: object) -> float:
-        try:
-            n = float(v or 3)
-            return n if n > 0 else 3.0
-        except (TypeError, ValueError):
-            return 3.0
-
-    @field_validator("minutes_per_position_prihod", mode="before")
-    @classmethod
-    def _mpp_prihod(cls, v: object) -> float:
         try:
             n = float(v or 3)
             return n if n > 0 else 3.0

@@ -3,19 +3,19 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, F, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.config import get_settings
 from bot.handlers.states import FinishStates
 from bot.keyboards.worker import (
     BTN_FINISH,
     BTN_PAUSE,
     BTN_RESUME,
     BTN_START,
-    BTN_START_INV,
-    BTN_START_PRIHOD,
     worker_active_kb,
     worker_idle_kb,
     worker_paused_kb,
@@ -33,16 +33,13 @@ from bot.services.mesta import (
     resume_session,
     start_session,
 )
-from bot.services.notify import finish_message, send_group
-from bot.utils.time_fmt import fmt_hm, fmt_minutes
-from bot.work_types import (
-    WorkType,
+from bot.services.notify import (
+    finish_message,
     group_finished_message,
     group_started_message,
-    minutes_per_position,
-    positions_question,
-    work_label_title,
+    send_group,
 )
+from bot.utils.time_fmt import fmt_hm, fmt_minutes
 from bot.yordamchi_push import push_to_yordamchi_hub, push_to_yordamchi_hub_background, today_iso
 
 router = Router(name="mesta")
@@ -60,11 +57,6 @@ def _keyboard_for_open(ws) -> object:
     return worker_active_kb()
 
 
-def _work_type(ws) -> WorkType:
-    wt = ws.work_type or WorkType.inventarizatsiya
-    return WorkType.prihod if str(wt) == WorkType.prihod else WorkType.inventarizatsiya
-
-
 async def _reply_open_session(
     message: Message,
     ws,
@@ -72,16 +64,13 @@ async def _reply_open_session(
     bot: Bot | None = None,
     state: FSMContext | None = None,
 ) -> None:
-    wt = _work_type(ws)
-    title = work_label_title(wt)
-
     if ws.status == SessionStatus.awaiting_positions:
         if state:
             await state.set_state(FinishStates.waiting_positions)
             await state.update_data(session_id=ws.id)
         await message.answer(
-            f"🏁 <b>{title} — yakunlash</b>\n\n"
-            f"{positions_question(wt)}\n"
+            "🏁 <b>Yakunlash davom etmoqda</b>\n\n"
+            "Nechta pozitsiya qildingiz?\n"
             "Faqat raqam yuboring yoki /start bilan bekor qiling.",
             reply_markup=worker_idle_kb(),
         )
@@ -104,7 +93,7 @@ async def _reply_open_session(
 
     status = "⏸ pauzada" if ws.status == SessionStatus.paused else "▶️ ishlayapti"
     await message.answer(
-        f"⚠️ <b>Sizda ochiq {title.lower()} ishi bor</b> ({status})\n\n"
+        f"⚠️ <b>Sizda ochiq mesta bor</b> ({status})\n\n"
         f"Boshlangan: <b>{fmt_hm(ws.started_at)}</b>\n\n"
         "Davom eting, «Yakunlash» bosing yoki yangi ish uchun /start yuboring.",
         reply_markup=kb,
@@ -125,46 +114,28 @@ async def _push_hub(db: AsyncSession, *, tg_id: int, summary: str, session_id: i
         push_to_yordamchi_hub_background(tg_id=tg_id, bot_key="mesta", summary=summary, day_iso=day)
 
 
-async def _start_work(
-    message: Message,
-    bot: Bot,
-    db: AsyncSession,
-    state: FSMContext,
-    *,
-    work_type: WorkType,
-) -> None:
+@router.message(Command("start_mesta"))
+@router.message(F.text == BTN_START)
+async def cmd_start_mesta(message: Message, bot: Bot, db: AsyncSession, state: FSMContext) -> None:
     uid, name = _user(message)
     existing = await get_open_session(db, uid)
     if existing:
         return await _reply_open_session(message, existing, bot=bot, state=state)
 
-    ws, err = await start_session(db, uid, name, work_type=work_type)
+    ws, err = await start_session(db, uid, name)
     if err:
         return await message.answer(f"⚠️ {err}")
     assert ws
-    full_name = ws.user.full_name if ws.user else name
-    await send_group(bot, group_started_message(name=full_name, work_type=work_type))
-    timer_text = live_timer.render_ws(ws, full_name)
+    await send_group(bot, group_started_message(name=ws.user.full_name))
+    timer_text = live_timer.render_ws(ws, ws.user.full_name)
     timer_msg = await message.answer(timer_text, reply_markup=worker_active_kb())
     await live_timer.attach(
         bot,
         tg_id=uid,
         chat_id=message.chat.id,
         message_id=timer_msg.message_id,
-        name=full_name,
+        name=ws.user.full_name,
     )
-
-
-@router.message(Command("start_mesta"))
-@router.message(F.text.in_({BTN_START, BTN_START_INV}))
-async def cmd_start_inventarizatsiya(message: Message, bot: Bot, db: AsyncSession, state: FSMContext) -> None:
-    await _start_work(message, bot, db, state, work_type=WorkType.inventarizatsiya)
-
-
-@router.message(Command("start_prihod"))
-@router.message(F.text == BTN_START_PRIHOD)
-async def cmd_start_prihod(message: Message, bot: Bot, db: AsyncSession, state: FSMContext) -> None:
-    await _start_work(message, bot, db, state, work_type=WorkType.prihod)
 
 
 @router.message(Command("pause_mesta"))
@@ -205,13 +176,12 @@ async def cmd_finish(message: Message, bot: Bot, state: FSMContext, db: AsyncSes
     if err:
         return await message.answer(f"⚠️ {err}")
     assert ws
-    wt = _work_type(ws)
     await live_timer.stop_with_work_time(bot, uid, header="🏁 <b>Sekundomer to'xtadi</b>")
     await state.set_state(FinishStates.waiting_positions)
     await state.update_data(session_id=ws.id)
     await message.answer(
-        f"🏁 <b>{work_label_title(wt)} — yakunlash</b>\n\n"
-        f"{positions_question(wt)}\n"
+        "🏁 <b>Yakunlash</b>\n\n"
+        "Nechta pozitsiya qildingiz?\n"
         "Faqat raqam yuboring, masalan: <code>25</code>",
         reply_markup=worker_idle_kb(),
     )
@@ -228,19 +198,17 @@ async def finish_positions(message: Message, bot: Bot, db: AsyncSession, state: 
     await state.clear()
 
     ws = view.session
-    wt = _work_type(ws)
-    mpp = minutes_per_position(wt)
+    settings = get_settings()
     report = finish_message(
         name=view.user.full_name,
         started_at=ws.started_at,
         finished_at=ws.finished_at,
         norm=view.norm,
-        minutes_per_position=mpp,
-        work_type=wt,
+        minutes_per_position=settings.minutes_per_position,
     )
     hub_summary = compact_hub_summary(ws, view.norm)
     await _push_hub(db, tg_id=uid, summary=hub_summary, session_id=ws.id)
-    await send_group(bot, group_finished_message(name=view.user.full_name, work_type=wt))
+    await send_group(bot, group_finished_message(name=view.user.full_name))
     await send_group(bot, report)
     await message.answer(report, reply_markup=worker_idle_kb())
 
@@ -254,13 +222,12 @@ async def finish_positions_invalid(message: Message) -> None:
 async def cmd_active(message: Message, db: AsyncSession) -> None:
     views = await list_active_sessions(db)
     if not views:
-        return await message.answer("Hozir ishlayotganlar yo'q.")
-    lines = ["<b>Hozir ishlayotganlar:</b>\n"]
+        return await message.answer("Hozir mesta bilan ishlayotganlar yo'q.")
+    lines = ["<b>Hozir mesta bilan ishlayotganlar:</b>\n"]
     for i, v in enumerate(views, 1):
-        wt = _work_type(v.session)
         status = "⏸ pauza" if v.session.status == "paused" else "▶️ ish"
         lines.append(
-            f"{i}. <b>{v.user.full_name}</b> — {work_label_title(wt)} ({status})\n"
+            f"{i}. <b>{v.user.full_name}</b> ({status})\n"
             f"   Boshlagan: {fmt_hm(v.session.started_at)}\n"
             f"   Ish vaqti: {fmt_minutes(v.norm.work_minutes)}"
         )

@@ -9,7 +9,6 @@ from sqlalchemy.orm import joinedload
 from bot.database.models import PositionLog, SessionStatus, User, WorkSession
 from bot.utils.norm import NormStatus, evaluate_norm
 from bot.utils.time_fmt import now_dt, session_pause_seconds, session_work_seconds
-from bot.work_types import WorkType, minutes_per_position, no_open_work_error, open_session_error, work_label_title
 
 
 @dataclass
@@ -25,8 +24,7 @@ def _norm_for(ws: WorkSession, *, actual: int | None = None, end=None) -> NormSt
     work_min = work_sec / 60.0
     pause_min = pause_sec / 60.0
     pos = actual if actual is not None else ws.total_positions
-    mpp = minutes_per_position(ws.work_type or WorkType.inventarizatsiya)
-    return evaluate_norm(pos, work_min, pause_minutes=pause_min, minutes_per_position=mpp)
+    return evaluate_norm(pos, work_min, pause_minutes=pause_min)
 
 
 def _as_aware(dt):
@@ -100,24 +98,16 @@ async def get_open_session(session: AsyncSession, telegram_id: int) -> WorkSessi
     return await session.scalar(q)
 
 
-async def start_session(
-    session: AsyncSession,
-    telegram_id: int,
-    full_name: str,
-    *,
-    work_type: WorkType | str = WorkType.inventarizatsiya,
-) -> tuple[WorkSession | None, str]:
+async def start_session(session: AsyncSession, telegram_id: int, full_name: str) -> tuple[WorkSession | None, str]:
     existing = await get_open_session(session, telegram_id)
     if existing:
-        wt = existing.work_type or WorkType.inventarizatsiya
-        return None, open_session_error(wt)
+        return None, "Sizda ochiq mesta bor. Avval yakunlang yoki davom eting."
 
     user = await get_or_create_user(session, telegram_id, full_name)
     ws = WorkSession(
         user_id=user.id,
         started_at=now_dt(),
         status=SessionStatus.active,
-        work_type=str(work_type),
         total_positions=0,
         total_pause_sec=0,
     )
@@ -130,7 +120,7 @@ async def start_session(
 async def pause_session(session: AsyncSession, telegram_id: int) -> tuple[SessionView | None, str]:
     ws = await get_open_session(session, telegram_id)
     if not ws:
-        return None, no_open_work_error()
+        return None, "Ochiq mesta yo'q."
     if ws.status == SessionStatus.awaiting_positions:
         return None, "Pozitsiya sonini kiriting."
     if ws.status == SessionStatus.paused:
@@ -145,7 +135,7 @@ async def pause_session(session: AsyncSession, telegram_id: int) -> tuple[Sessio
 async def resume_session(session: AsyncSession, telegram_id: int) -> tuple[SessionView | None, str]:
     ws = await get_open_session(session, telegram_id)
     if not ws:
-        return None, no_open_work_error()
+        return None, "Ochiq mesta yo'q."
     if ws.status != SessionStatus.paused:
         return None, "Pauza yo'q."
 
@@ -158,7 +148,7 @@ async def resume_session(session: AsyncSession, telegram_id: int) -> tuple[Sessi
 async def request_finish(session: AsyncSession, telegram_id: int) -> tuple[WorkSession | None, str]:
     ws = await get_open_session(session, telegram_id)
     if not ws:
-        return None, no_open_work_error()
+        return None, "Ochiq mesta yo'q."
     if ws.status == SessionStatus.awaiting_positions:
         return ws, ""
 
