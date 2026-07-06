@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from bot.utils.time_fmt import tz
 
 def _day_bounds(day: str) -> tuple[datetime, datetime]:
     y, m, d = (int(x) for x in day.split("-"))
-    start = datetime.combine(time(y, m, d), time.min, tzinfo=tz())
+    start = datetime.combine(date(y, m, d), time.min, tzinfo=tz())
     return start, start + timedelta(days=1)
 
 
