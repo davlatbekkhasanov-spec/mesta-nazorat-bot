@@ -84,84 +84,24 @@ def run_migrations(url: str) -> None:
         raise RuntimeError(f"Migration DB ulanmadi: {last_err}")
 
     cfg = Config("alembic.ini")
-    has_users = False
     _apply_schema_patches(engine)
     try:
         with engine.connect() as conn:
             has_users = bool(conn.execute(text("SELECT to_regclass('public.users')")).scalar())
         if has_users:
-            _reconcile_alembic_stamp(engine, cfg)
-            command.stamp(cfg, "head")
-            log.info("Alembic head stamp (mavjud DB)")
+            log.info("Mavjud DB — Alembic o'tkazib yuborildi (schema patches yetarli)")
         else:
             command.upgrade(cfg, "head")
             log.info("Alembic upgrade head OK")
     except Exception as exc:
         last_err = exc
         log.warning("Alembic migrate failed: %s", exc)
-        if has_users:
-            try:
-                command.stamp(cfg, "head")
-                log.info("Alembic stamped head after failure")
-            except Exception as exc2:
-                log.warning("Alembic stamp head failed: %s", exc2)
         try:
             Base.metadata.create_all(engine)
         except Exception as exc2:
             log.warning("create_all fallback failed: %s", exc2)
 
-    _apply_schema_patches(engine)
     engine.dispose()
-
-
-def _reconcile_alembic_stamp(engine, cfg) -> None:
-    """Mavjud DB da alembic_version orqada qolsa — 002 da qotib qolmaslik."""
-    from alembic import command
-
-    with engine.connect() as conn:
-        if not conn.execute(text("SELECT to_regclass('public.users')")).scalar():
-            return
-
-        def has_col(column: str) -> bool:
-            return bool(
-                conn.execute(
-                    text(
-                        "SELECT 1 FROM information_schema.columns "
-                        "WHERE table_schema='public' AND table_name='work_sessions' "
-                        "AND column_name=:c LIMIT 1"
-                    ),
-                    {"c": column},
-                ).scalar()
-            )
-
-        target: str | None = None
-        if has_col("work_type"):
-            target = "004"
-        elif has_col("paused_at"):
-            width = conn.execute(
-                text(
-                    "SELECT character_maximum_length FROM information_schema.columns "
-                    "WHERE table_schema='public' AND table_name='work_sessions' "
-                    "AND column_name='status'"
-                )
-            ).scalar()
-            target = "003" if width and int(width) >= 32 else "002"
-        elif conn.execute(text("SELECT to_regclass('public.hub_day_push')")).scalar():
-            target = "002"
-
-        has_ver = conn.execute(text("SELECT to_regclass('public.alembic_version')")).scalar()
-        if not target:
-            if not has_ver:
-                command.stamp(cfg, "001")
-                log.info("Alembic stamped 001 (mavjud jadval)")
-            return
-
-        current = None
-        if has_ver:
-            current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        if current != target:
-            command.stamp(cfg, target)
-            log.info("Alembic stamped %s (schema reconcile)", target)
 
 
 def _apply_schema_patches(engine) -> None:
@@ -171,7 +111,17 @@ def _apply_schema_patches(engine) -> None:
         "ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS total_pause_sec INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS hub_pushed_at TIMESTAMPTZ",
         "ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS work_type VARCHAR(32) NOT NULL DEFAULT 'inventarizatsiya'",
-        "ALTER TABLE work_sessions ALTER COLUMN status TYPE VARCHAR(32)",
+        """
+        DO $$ BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'work_sessions'
+              AND column_name = 'status' AND character_maximum_length < 32
+          ) THEN
+            ALTER TABLE work_sessions ALTER COLUMN status TYPE VARCHAR(32);
+          END IF;
+        END $$
+        """,
         """
         CREATE TABLE IF NOT EXISTS hub_day_push (
             day VARCHAR(10) NOT NULL,
