@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from bot.database.models import PositionLog, SessionStatus, User, WorkSession
+from bot.employee_registry import display_name_for_user
 from bot.utils.norm import NormStatus, evaluate_norm
 from bot.utils.time_fmt import now_dt, session_pause_seconds, session_work_seconds
 
@@ -46,12 +47,13 @@ def _close_pause(ws: WorkSession) -> None:
 
 
 async def get_or_create_user(session: AsyncSession, telegram_id: int, full_name: str) -> User:
+    canon = display_name_for_user(telegram_id, full_name)
     user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
     if user:
-        if full_name and user.full_name != full_name:
-            user.full_name = full_name
+        if canon and user.full_name != canon:
+            user.full_name = canon
         return user
-    user = User(telegram_id=telegram_id, full_name=full_name or "Noma'lum")
+    user = User(telegram_id=telegram_id, full_name=canon or full_name or "Noma'lum")
     session.add(user)
     await session.flush()
     return user

@@ -138,6 +138,54 @@ def _apply_schema_patches(engine) -> None:
     log.info("Schema patches applied")
 
 
+async def migrate_legacy_tg_ids() -> None:
+    """Postgres: eski Farrux/Ozodbek telegram_id → Pulat/Shoxijaxon."""
+    from bot.employee_registry import LEGACY_TG_ID_MAP
+    from bot.database.session import require_session_local
+
+    factory = require_session_local()
+    async with factory() as session:
+        for old_tg, (new_tg, canon_name) in LEGACY_TG_ID_MAP.items():
+            new_exists = await session.scalar(
+                text("SELECT 1 FROM users WHERE telegram_id = :new LIMIT 1"),
+                {"new": new_tg},
+            )
+            if new_exists:
+                await session.execute(
+                    text("UPDATE users SET is_active = false WHERE telegram_id = :old"),
+                    {"old": old_tg},
+                )
+            else:
+                await session.execute(
+                    text(
+                        """
+                        UPDATE users
+                        SET telegram_id = :new, full_name = :name
+                        WHERE telegram_id = :old
+                        """
+                    ),
+                    {"new": new_tg, "name": canon_name, "old": old_tg},
+                )
+            await session.execute(
+                text(
+                    """
+                    UPDATE hub_day_push SET tg_id = :new
+                    WHERE tg_id = :old
+                      AND NOT EXISTS (
+                        SELECT 1 FROM hub_day_push h WHERE h.day = hub_day_push.day AND h.tg_id = :new
+                      )
+                    """
+                ),
+                {"new": new_tg, "old": old_tg},
+            )
+            await session.execute(
+                text("DELETE FROM hub_day_push WHERE tg_id = :old"),
+                {"old": old_tg},
+            )
+        await session.commit()
+    log.info("Legacy TG ID migration applied")
+
+
 async def sync_admins_from_env() -> None:
     from bot.database.session import require_session_local
 

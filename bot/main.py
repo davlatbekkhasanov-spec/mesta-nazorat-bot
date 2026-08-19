@@ -11,7 +11,7 @@ from aiogram.types import ErrorEvent
 from sqlalchemy import text
 
 from bot.config import get_settings
-from bot.database.bootstrap import run_migrations, setup_database, sync_admins_from_env
+from bot.database.bootstrap import migrate_legacy_tg_ids, run_migrations, setup_database, sync_admins_from_env
 from bot.database.session import require_session_local
 from bot.handlers import setup_routers
 from bot.middlewares.access import TeamAccessMiddleware
@@ -36,6 +36,7 @@ async def main() -> None:
             db_url, _ = await setup_database()
             run_migrations(db_url)
             await sync_admins_from_env()
+            await migrate_legacy_tg_ids()
             last_exc = None
             break
         except Exception as exc:
