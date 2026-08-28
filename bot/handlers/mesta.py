@@ -209,7 +209,6 @@ async def finish_positions(message: Message, bot: Bot, db: AsyncSession, state: 
     hub_summary = compact_hub_summary(ws, view.norm)
     await _push_hub(db, tg_id=uid, summary=hub_summary, session_id=ws.id)
     await send_group(bot, group_finished_message(name=view.user.full_name))
-    await send_group(bot, report)
     await message.answer(report, reply_markup=worker_idle_kb())
 
 
