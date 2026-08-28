@@ -13,12 +13,19 @@ from sqlalchemy import text
 from bot.config import get_settings
 from bot.database.bootstrap import migrate_legacy_tg_ids, run_migrations, setup_database, sync_admins_from_env
 from bot.database.session import require_session_local
+from bot.database.models import SessionStatus
 from bot.handlers import setup_routers
 from bot.middlewares.access import TeamAccessMiddleware
 from bot.middlewares.db import DbSessionMiddleware
 from bot.services.hub_replay import list_unpushed_finishes, mark_hub_pushed
+from bot.services.mesta import list_active_sessions
 from bot.services.monitor import run_norm_monitor
-from bot.yordamchi_push import hub_status_line, push_to_yordamchi_hub, today_iso
+from bot.yordamchi_push import (
+    hub_status_line,
+    push_session_start_background,
+    push_to_yordamchi_hub,
+    today_iso,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +58,20 @@ async def main() -> None:
     async with factory() as session:
         await session.execute(text("SELECT 1"))
     log.info("Database connection OK")
+
+    async with factory() as session:
+        open_views = await list_active_sessions(session)
+        for v in open_views:
+            st = "paused" if v.session.status == SessionStatus.paused else "active"
+            push_session_start_background(
+                tg_id=v.user.telegram_id,
+                bot_key="mesta",
+                user_name=v.user.full_name,
+                activity_type="mesta",
+                status=st,
+            )
+        if open_views:
+            log.info("Live hub sync: %s ochiq mesta sessiyasi", len(open_views))
 
     bot = Bot(
         settings.bot_token,
