@@ -40,7 +40,14 @@ from bot.services.notify import (
     send_group,
 )
 from bot.utils.time_fmt import fmt_hm, fmt_minutes
-from bot.yordamchi_push import push_to_yordamchi_hub, push_to_yordamchi_hub_background, today_iso
+from bot.yordamchi_push import (
+    push_session_end_background,
+    push_session_start_background,
+    push_session_update_background,
+    push_to_yordamchi_hub,
+    push_to_yordamchi_hub_background,
+    today_iso,
+)
 
 router = Router(name="mesta")
 log = logging.getLogger(__name__)
@@ -126,7 +133,14 @@ async def cmd_start_mesta(message: Message, bot: Bot, db: AsyncSession, state: F
     if err:
         return await message.answer(f"⚠️ {err}")
     assert ws
-    await send_group(bot, group_started_message(name=ws.user.full_name))
+    full_name = ws.user.full_name if ws.user else name
+    push_session_start_background(
+        tg_id=uid,
+        bot_key="mesta",
+        user_name=full_name,
+        activity_type="mesta",
+    )
+    await send_group(bot, group_started_message(name=full_name))
     timer_text = live_timer.render_ws(ws, ws.user.full_name)
     timer_msg = await message.answer(timer_text, reply_markup=worker_active_kb())
     await live_timer.attach(
@@ -147,6 +161,13 @@ async def cmd_pause(message: Message, bot: Bot, db: AsyncSession) -> None:
         return await message.answer(f"⚠️ {err}")
     assert view
     await live_timer.refresh(bot, uid)
+    push_session_update_background(
+        tg_id=uid,
+        bot_key="mesta",
+        user_name=view.user.full_name,
+        activity_type="mesta",
+        status="paused",
+    )
     await message.answer(
         "⏸ <b>Pauza</b>\n\nSekundomer to'xtadi. Davom etish uchun tugmani bosing.",
         reply_markup=worker_paused_kb(),
@@ -162,6 +183,13 @@ async def cmd_resume(message: Message, bot: Bot, db: AsyncSession) -> None:
         return await message.answer(f"⚠️ {err}")
     assert view
     await live_timer.refresh(bot, uid)
+    push_session_update_background(
+        tg_id=uid,
+        bot_key="mesta",
+        user_name=view.user.full_name,
+        activity_type="mesta",
+        status="active",
+    )
     await message.answer(
         "▶️ <b>Davom etildi</b>\n\nSekundomer qayta ishlayapti.",
         reply_markup=worker_active_kb(),
@@ -208,6 +236,7 @@ async def finish_positions(message: Message, bot: Bot, db: AsyncSession, state: 
     )
     hub_summary = compact_hub_summary(ws, view.norm)
     await _push_hub(db, tg_id=uid, summary=hub_summary, session_id=ws.id)
+    push_session_end_background(tg_id=uid, bot_key="mesta", activity_type="mesta")
     await send_group(bot, group_finished_message(name=view.user.full_name))
     await message.answer(report, reply_markup=worker_idle_kb())
 
